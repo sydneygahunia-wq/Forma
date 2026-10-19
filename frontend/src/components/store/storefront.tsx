@@ -181,7 +181,7 @@ export function Storefront() {
         )}
         {products.error && (
           <p className="border border-danger/40 bg-danger/5 p-4 text-sm text-danger">
-            We couldn’t reach the store API. Is the backend running on port 8000?
+            We couldn’t load the products. Please refresh the page in a moment.
           </p>
         )}
         <ul className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4">

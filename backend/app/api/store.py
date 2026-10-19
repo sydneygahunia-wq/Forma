@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 
 from app.api.deps import SessionDep
 from app.db.models import OrderStatus
@@ -14,6 +14,7 @@ from app.schemas import (
     ProductOut,
 )
 from app.services import catalog, orders
+from app.services.rate_limit import limit
 
 router = APIRouter(prefix="/api", tags=["store"])
 
@@ -34,7 +35,12 @@ def get_product(product_id: int, session: SessionDep):
     return catalog.get_product(session, product_id)
 
 
-@router.post("/carts", response_model=CartOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/carts",
+    response_model=CartOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit("writes", "rate_limit_writes_per_min"))],
+)
 def create_cart(session: SessionDep):
     return catalog.create_cart(session)
 
@@ -59,6 +65,7 @@ def remove_cart_item(cart_id: str, product_id: int, session: SessionDep):
     response_model=OrderOut,
     status_code=status.HTTP_201_CREATED,
     responses={200: {"model": OrderOut, "description": "Idempotent replay"}, **ERRORS},
+    dependencies=[Depends(limit("orders", "rate_limit_orders_per_min"))],
 )
 def place_order(
     body: OrderCreate,

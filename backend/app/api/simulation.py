@@ -3,12 +3,21 @@ import contextlib
 import logging
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel, Field
 
 from app.api.deps import BusDep, HubDep, SessionDep
 from app.services import orders
 from app.services.bus import COMMAND_CHANNEL, SIM_CHANNEL
+from app.services.rate_limit import limit
 from app.simulation import default_warehouse
 from app.simulation.pathfinding import ALGORITHMS
 
@@ -44,7 +53,11 @@ class Command(BaseModel):
     name: Literal["fifo", "nearest", "batch_greedy"] | None = None
 
 
-@router.post("/simulation/commands", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/simulation/commands",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(limit("writes", "rate_limit_writes_per_min"))],
+)
 async def send_command(cmd: Command, bus: BusDep):
     """Commands are asynchronous (202 Accepted): they're queued for the
     simulation loop, which applies them at the start of its next tick."""

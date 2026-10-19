@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import Link from "next/link";
 
+import { ApiStatus } from "@/components/api-status";
 import { WarehouseFloor } from "@/components/warehouse/warehouse-floor";
 import { useSimulationFeed } from "@/hooks/use-simulation-feed";
 import { api } from "@/lib/api";
@@ -35,6 +36,7 @@ export function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
+      <ApiStatus />
       <header className="mx-auto max-w-[1200px] px-6 py-6">
         <span className="text-[18px] font-semibold tracking-[0.32em]">FORMA</span>
       </header>

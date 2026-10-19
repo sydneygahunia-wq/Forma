@@ -1,10 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import Link from "next/link";
+import { useMemo, useSyncExternalStore } from "react";
 
 import { api } from "@/lib/api";
-import type { OrderStatus } from "@/lib/types";
+import { myOrdersStore, parseOrderIds } from "@/lib/my-orders";
+import type { Order, OrderStatus } from "@/lib/types";
 import { cn, formatCents, shortId } from "@/lib/utils";
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -15,11 +17,24 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 export function OrderList() {
-  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.orders(100), refetchInterval: 2000 });
+  // Only orders placed from this browser: a shared demo store must not list
+  // other visitors' purchases.
+  const raw = useSyncExternalStore(myOrdersStore.subscribe, myOrdersStore.getSnapshot, myOrdersStore.getServerSnapshot);
+  const ids = useMemo(() => (raw === null ? [] : parseOrderIds(raw)), [raw]);
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["order", id],
+      queryFn: () => api.order(id),
+      refetchInterval: (q: { state: { data?: Order } }) => (q.state.data?.status === "shipped" ? false : 2000),
+    })),
+  });
+  const orders = results.map((r) => r.data).filter((o): o is Order => o !== undefined);
+  const loading = raw === null || results.some((r) => r.isPending);
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-12 sm:px-6">
-      <h1 className="mb-8 text-[30px] font-normal">Order history</h1>
+      <h1 className="mb-2 text-[30px] font-normal">Order history</h1>
+      <p className="mb-8 text-[14px] text-muted-foreground">Orders placed from this browser.</p>
       <table className="w-full text-[15px]">
         <thead>
           <tr className="border-b border-border text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -31,7 +46,7 @@ export function OrderList() {
           </tr>
         </thead>
         <tbody>
-          {orders.data?.map((o) => (
+          {orders.map((o) => (
             <tr key={o.id} className="border-b border-border">
               <td className="py-4">
                 <Link href={`/orders/${o.id}`} className="underline underline-offset-4">
@@ -52,11 +67,13 @@ export function OrderList() {
                   {STATUS_LABEL[o.status]}
                 </span>
               </td>
-              <td className="hidden py-4 text-right tabular-nums sm:table-cell">{o.item_count}</td>
+              <td className="hidden py-4 text-right tabular-nums sm:table-cell">
+                {o.items.reduce((n, i) => n + i.quantity, 0)}
+              </td>
               <td className="py-4 text-right tabular-nums">{formatCents(o.total_cents)}</td>
             </tr>
           ))}
-          {orders.data?.length === 0 && (
+          {!loading && orders.length === 0 && (
             <tr>
               <td colSpan={5} className="py-16 text-center text-muted-foreground">
                 You haven’t placed any orders yet.{" "}

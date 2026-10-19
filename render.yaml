@@ -1,0 +1,28 @@
+# Render Blueprint for the Forma API (backend only; the frontend is on Vercel).
+# New > Blueprint in the Render dashboard, pick this repo, then paste the
+# Neon connection string when asked for DATABASE_URL.
+services:
+  - type: web
+    name: forma-api
+    runtime: docker
+    plan: free
+    region: oregon            # same AWS region as the Neon database
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"         # the port the Docker image's uvicorn listens on
+      - key: DATABASE_URL
+        sync: false           # secret: entered in the dashboard, never committed
+      - key: CORS_ORIGIN_REGEX
+        value: https://forma[a-z0-9-]*\.vercel\.app
+      - key: DEMO_MODE
+        value: "true"
+      - key: RATE_LIMIT_ORDERS_PER_MIN
+        value: "10"
+      - key: RATE_LIMIT_WRITES_PER_MIN
+        value: "60"
+      - key: LOG_LEVEL
+        value: INFO

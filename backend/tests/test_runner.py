@@ -200,3 +200,87 @@ def test_redis_bus_round_trip():
         return msg
 
     assert asyncio.run(scenario()) == {"type": "snapshot", "tick": 7}
+
+
+# ------------------------------------------------------------ public demo
+
+
+def test_hosted_postgres_urls_get_the_psycopg_driver():
+    for raw in (
+        "postgres://u:p@host/db?sslmode=require",
+        "postgresql://u:p@host/db?sslmode=require",
+    ):
+        assert (
+            Settings(database_url=raw).database_url
+            == "postgresql+psycopg://u:p@host/db?sslmode=require"
+        )
+    assert Settings(database_url="sqlite:///x.db").database_url == "sqlite:///x.db"
+
+
+def test_demo_heals_pause_and_offline_robots(migrated_db, db_url):
+    runner = SimulationRunner(
+        _settings(db_url, demo_mode=True, demo_heal_after_s=120), migrated_db, InMemoryBus()
+    )
+    runner.apply_command({"action": "pause"})
+    runner.apply_command({"action": "robot", "robot_id": 2, "online": False})
+    start = runner.paused_at
+    assert runner.heal(start + 60) == []  # too soon
+    assert runner.paused and runner.sim.robots[2].state.value == "offline"
+    events = runner.heal(start + 121)
+    assert [e["type"] for e in events] == ["auto_resumed"]
+    assert not runner.paused
+    assert runner.sim.robots[2].state.value != "offline"
+    assert runner.offline_since == {}
+
+
+def test_demo_restock_tops_up_only_low_stock(migrated_db, db_url):
+    db = migrated_db
+    runner = SimulationRunner(_settings(db_url), db, InMemoryBus())
+    from app.db.models import Inventory
+
+    with db.session() as s:
+        mug = s.scalar(select(Product).where(Product.sku == "MUG-001"))  # starts at 40
+        lamp = s.scalar(select(Product).where(Product.sku == "LMP-008"))  # starts at 15
+        s.get(Inventory, mug.id).quantity = 2  # below 40 // 4 = 10 -> restock
+        s.get(Inventory, lamp.id).quantity = 12  # above 15 // 4 = 3 -> leave alone
+        s.commit()
+    assert runner.restock() == 1
+    with db.session() as s:
+        assert s.get(Inventory, mug.id).quantity == 40
+        assert s.get(Inventory, lamp.id).quantity == 12
+    assert runner.restock() == 0  # idempotent
+
+
+def test_rate_limit_returns_429(db_url):
+    settings = Settings(
+        database_url=db_url, sim_mode="external", log_level="WARNING", rate_limit_orders_per_min=2
+    )
+    with TestClient(create_app(settings)) as client:
+        mug = client.get("/api/products").json()[0]
+        body = {
+            "customer_email": "rl@example.com",
+            "items": [{"product_id": mug["id"], "quantity": 1}],
+        }
+        codes = [client.post("/api/orders", json=body).status_code for _ in range(3)]
+        assert codes == [201, 201, 429]
+        blocked = client.post("/api/orders", json=body)
+        assert blocked.headers["retry-after"] == "60"
+        # A different client (per X-Forwarded-For) has its own budget.
+        other = client.post("/api/orders", json=body, headers={"X-Forwarded-For": "203.0.113.9"})
+        assert other.status_code == 201
+
+
+def test_cors_allows_vercel_previews_by_regex(db_url):
+    settings = Settings(
+        database_url=db_url,
+        sim_mode="external",
+        log_level="WARNING",
+        cors_origin_regex=r"https://forma.*\.vercel\.app",
+    )
+    with TestClient(create_app(settings)) as client:
+        ok = client.get("/api/health", headers={"Origin": "https://forma-git-main-abc.vercel.app"})
+        bad = client.get("/api/health", headers={"Origin": "https://evil.example.com"})
+        assert (
+            ok.headers.get("access-control-allow-origin") == "https://forma-git-main-abc.vercel.app"
+        )
+        assert "access-control-allow-origin" not in bad.headers

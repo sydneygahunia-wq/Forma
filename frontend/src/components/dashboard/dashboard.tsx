@@ -57,6 +57,10 @@ export function describeEvent(e: SimEvent): string {
       return `task for ${order} re-queued`;
     case "robot_yield":
       return `robot ${e.robot_id} yielded to robot ${e.blocker}`;
+    case "restock":
+      return `warehouse restocked ${e.products} product${e.products === 1 ? "" : "s"}`;
+    case "auto_resumed":
+      return "simulation resumed automatically";
     default:
       return e.type;
   }

@@ -13,6 +13,7 @@ import {
 import type { ReactNode } from "react";
 
 import { api, ApiError } from "@/lib/api";
+import { rememberOrder } from "@/lib/my-orders";
 import type { Cart, Product } from "@/lib/types";
 
 const STORAGE_KEY = "forma.cartId";
@@ -118,7 +119,8 @@ function useCartState() {
     // Safe to retry *only because* of the idempotency key. Retry on network
     // failures, never on 4xx business errors like out-of-stock.
     retry: (count, err) => count < 2 && !(err instanceof ApiError),
-    onSuccess: () => {
+    onSuccess: (order) => {
+      rememberOrder(order.id);
       checkoutKey.current = null;
       storeId(null);
       qc.invalidateQueries({ queryKey: ["products"] });

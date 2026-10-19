@@ -109,3 +109,16 @@ describe("misc", () => {
     expect(stepIndex("shipped")).toBe(3);
   });
 });
+
+describe("my-orders storage", () => {
+  it("remembers newest first, de-duplicates, and survives bad data", async () => {
+    const { parseOrderIds, rememberOrder } = await import("@/lib/my-orders");
+    localStorage.clear();
+    rememberOrder("a");
+    rememberOrder("b");
+    rememberOrder("a");
+    expect(parseOrderIds(localStorage.getItem("forma.myOrders")!)).toEqual(["a", "b"]);
+    expect(parseOrderIds("not json")).toEqual([]);
+    expect(parseOrderIds('{"x":1}')).toEqual([]);
+  });
+});

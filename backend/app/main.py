@@ -16,6 +16,7 @@ from app.logging_config import RequestLogMiddleware, configure_logging
 from app.services.bus import make_bus
 from app.services.errors import DomainError
 from app.services.hub import SnapshotHub
+from app.services.rate_limit import RateLimiter
 from app.services.sim_runner import SimulationRunner
 
 log = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         bus = make_bus(settings.redis_url)
         hub = SnapshotHub(bus)
         app.state.db, app.state.bus, app.state.hub = db, bus, hub
+        app.state.settings = settings
+        app.state.rate_limiter = RateLimiter()
         await hub.start()
 
         runner = None
@@ -76,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["Idempotent-Replayed", "X-Request-ID"],

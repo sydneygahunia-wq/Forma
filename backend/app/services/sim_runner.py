@@ -27,7 +27,8 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
 from app.config import Settings
-from app.db.models import Order, OrderEvent, OrderItem, OrderStatus, Product, utcnow
+from app.db.models import Inventory, Order, OrderEvent, OrderItem, OrderStatus, Product, utcnow
+from app.db.seed import CATALOGUE
 from app.db.session import Database
 from app.services.bus import COMMAND_CHANNEL, SIM_CHANNEL, Bus
 from app.services.orders import rowcount
@@ -56,6 +57,10 @@ class SimulationRunner:
         self._commands: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._tasks: list[asyncio.Task[None]] = []
         self.last_tick_ms = 0.0
+        # Demo-mode bookkeeping (monotonic timestamps).
+        self.paused_at: float | None = None
+        self.offline_since: dict[int, float] = {}
+        self.last_restock = time.monotonic()
 
     def _new_sim(self, scheduler: str) -> Simulation:
         sim = Simulation(
@@ -102,6 +107,8 @@ class SimulationRunner:
         while True:
             try:
                 await self._drain_commands()
+                if self.settings.demo_mode:
+                    await self._demo_upkeep(time.monotonic())
                 if not self.paused:
                     started = time.perf_counter()
                     events = await asyncio.to_thread(self._step)
@@ -119,6 +126,64 @@ class SimulationRunner:
             await asyncio.sleep(max(0.0, next_at - time.monotonic()))
             if time.monotonic() - next_at > 1:
                 next_at = time.monotonic()  # fell far behind; resync
+
+    # ------------------------------------------------------------ demo mode
+
+    async def _demo_upkeep(self, now: float) -> None:
+        events = self.heal(now)
+        if now - self.last_restock >= self.settings.demo_restock_every_s:
+            self.last_restock = now
+            restocked = await asyncio.to_thread(self.restock)
+            if restocked:
+                events.append(
+                    {"type": "restock", "tick": self.sim.tick_count, "products": restocked}
+                )
+        if events:
+            self.recent_events.extend(events)
+            await self.bus.publish(SIM_CHANNEL, {"type": "events", "events": events})
+
+    def heal(self, now: float) -> list[dict[str, Any]]:
+        """Undo anything a visitor broke once it has lasted ``demo_heal_after_s``."""
+        events: list[dict[str, Any]] = []
+        after = self.settings.demo_heal_after_s
+        if self.paused and self.paused_at is not None and now - self.paused_at >= after:
+            self.paused, self.paused_at = False, None
+            events.append({"type": "auto_resumed", "tick": self.sim.tick_count})
+        for robot_id, since in list(self.offline_since.items()):
+            if now - since >= after:
+                # The engine emits robot_online on its next tick.
+                self.sim.set_robot_online(robot_id, True)
+                del self.offline_since[robot_id]
+        return events
+
+    def restock(self) -> int:
+        """Top up any product below a quarter of its starting stock.
+
+        The UPDATE re-checks the threshold itself, so a restock and a
+        concurrent purchase can't both act on a stale read.
+        """
+        targets = {sku: stock for sku, _name, _cat, _price, stock in CATALOGUE}
+        restocked = 0
+        with self.db.session() as s:
+            rows = s.execute(
+                select(Product.id, Product.sku, Inventory.quantity).join(Inventory)
+            ).all()
+            for product_id, sku, quantity in rows:
+                target = targets.get(sku)
+                if target is None:
+                    continue
+                floor = max(1, target // 4)
+                if quantity < floor:
+                    result = s.execute(
+                        update(Inventory)
+                        .where(Inventory.product_id == product_id, Inventory.quantity < floor)
+                        .values(quantity=target)
+                    )
+                    restocked += rowcount(result)
+            s.commit()
+        if restocked:
+            log.info("demo restock topped up %d products", restocked)
+        return restocked
 
     def _step(self) -> list[dict[str, Any]]:
         """One tick. Runs in a worker thread so DB I/O doesn't block asyncio."""
@@ -180,12 +245,18 @@ class SimulationRunner:
         action = cmd["action"]
         if action == "pause":
             self.paused = True
+            self.paused_at = time.monotonic()
         elif action == "resume":
-            self.paused = False
+            self.paused, self.paused_at = False, None
         elif action == "speed":
             self.tick_interval = max(0.02, min(2.0, float(cmd["tick_interval_ms"]) / 1000))
         elif action == "robot":
-            self.sim.set_robot_online(int(cmd["robot_id"]), bool(cmd["online"]))
+            robot_id, online = int(cmd["robot_id"]), bool(cmd["online"])
+            self.sim.set_robot_online(robot_id, online)
+            if online:
+                self.offline_since.pop(robot_id, None)
+            else:
+                self.offline_since.setdefault(robot_id, time.monotonic())
         elif action == "scheduler":
             # Swap strategy in place; robots and tasks keep their state.
             from app.simulation.scheduler import SCHEDULERS

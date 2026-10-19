@@ -125,8 +125,9 @@ export function CartDrawer() {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mb-3"
+            className="mb-1.5"
           />
+          <p className="mb-3 text-[12px] text-muted-foreground">Demo store: use any email, nothing is sent.</p>
           <Button type="submit" className="w-full" disabled={!count || checkout.isPending}>
             {checkout.isPending ? "Placing order…" : "Place order"}
           </Button>
