@@ -1,5 +1,7 @@
 # Forma
 
+[![CI](https://github.com/sydneygahunia-wq/Forma/actions/workflows/ci.yml/badge.svg)](https://github.com/sydneygahunia-wq/Forma/actions/workflows/ci.yml)
+
 **An e-commerce store whose orders are fulfilled by a simulated fleet of warehouse robots.**
 
 Customers shop and check out on a Next.js storefront. The FastAPI backend reserves inventory in a single transaction, so the last unit can never be sold twice. Each order then becomes pick tasks in a deterministic warehouse simulation, where robots plan routes with A* (implemented from scratch), avoid each other on a 2D grid with one-way aisles, and bring every item to one packing station. Customers and the warehouse team both watch it happen live over WebSocket.
@@ -89,7 +91,7 @@ CI (`.github/workflows/ci.yml`) runs all of these, with Postgres as a service co
 
 ## Known limitations
 
-- **Not deployed yet**, and Docker Compose and CI haven't run end to end yet. Both are configured; see [docs/ROADMAP.md](docs/ROADMAP.md).
+- **Not deployed yet.** CI passes on GitHub (backend on Postgres, frontend, Playwright, Docker image builds), but the full `docker compose up` stack hasn't been run as a deployment. See [docs/ROADMAP.md](docs/ROADMAP.md).
 - **No authentication.** The ops endpoints (pause, take robot offline) are open, which is fine for a local demo but not for a public deployment.
 - **One simulation process.** The engine is single-threaded by design (deterministic). Scaling beyond one warehouse would mean one engine per warehouse.
 - `npm audit` flags a `braces` advisory inside Next's ESLint plugin. It's dev-only tooling with no patched release upstream yet. Production dependencies report 0 vulnerabilities, and the Python dependencies pass `pip-audit`.

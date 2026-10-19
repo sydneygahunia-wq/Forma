@@ -89,3 +89,10 @@ ruff, mypy, pip check, pip-audit (0 known vulnerabilities), pytest on SQLite and
 
 ### Known and accepted
 - `npm audit` reports a `braces` advisory inside `eslint-config-next`. It's dev-only, and there's no patched release upstream; the only offered fix is downgrading to Next 14's config.
+
+## 2026-10-18 (later): published to GitHub, CI green
+
+- Pushed to github.com/sydneygahunia-wq/Forma.
+- **First CI run failed** in the frontend type check: `Cannot find name 'LayoutProps'`. Next.js generates route types into `.next/`, which a fresh checkout doesn't have; locally an old `.next/` had hidden this. Reproduced in a fresh clone, then fixed with `next typegen && tsc --noEmit`.
+- Moved the GitHub Actions to v7 (Node 24 runtime), clearing the Node 20 deprecation warnings.
+- **Second run all green:** backend (including the race-condition tests on Postgres 16), frontend, Playwright end-to-end, and both Docker images build. This is the first verification of the Dockerfiles.
