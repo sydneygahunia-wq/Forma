@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.db
+*.db-wal
+*.db-shm
+backend/.env
+
+# Node / Next
+node_modules/
+.next/
+out/
+frontend/.env*.local
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local Claude Code preview config (machine-specific paths)
+.claude/

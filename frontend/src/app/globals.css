@@ -1,0 +1,112 @@
+@import "tailwindcss";
+@import "tw-animate-css"; /* shadcn/ui enter/exit animations */
+
+/*
+ * Two surfaces, two palettes:
+ *   storefront (default)  light, quiet, product-first (after Shopify's Dawn theme)
+ *   .console              internal tools: plain, light, utilitarian (after PlanViz / RWARE)
+ * Components only use the token names, so each surface restyles them.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #121212;
+  --muted: #f3f3f3;
+  --muted-foreground: #6b6b6b;
+  --border: #e3e3e3;
+  --border-strong: #121212;
+  --primary: #121212;
+  --primary-foreground: #ffffff;
+  --accent: #1f6f4a;
+  --success: #1f6f4a;
+  --warning: #9a5b00;
+  --danger: #b42318;
+
+  /* Warehouse floor: the plain, functional look of research simulators
+     (PlanViz, RWARE, MAPF visualisers). One palette everywhere. */
+  --floor-bg: #ffffff;
+  --floor-grid: #d6d6d6;
+  --floor-wall: #111111;
+  --floor-shelf: #4b5a8a;
+  --floor-shelf-active: #2a9d8f;
+  --floor-pack: #5c5c5c;
+  --floor-dock: #ececec;
+  --floor-label: #8a8a8a;
+  --floor-robot: #2b7bd6;
+  --floor-robot-edge: #174a87;
+  --floor-robot-idle: #a3a8ae;
+  --floor-goal: #f28c28;
+  --floor-select: #f28c28;
+}
+
+/* Internal tools: a plain, light desktop-app look (like PlanViz / AnyLogic). */
+.console {
+  --background: #f2f2f2;
+  --foreground: #1d1d1f;
+  --panel: #ffffff;
+  --panel-header: #fafafa;
+  --muted: #f0f0f0;
+  --muted-foreground: #6b6b6b;
+  --border: #d9d9d9;
+  --border-strong: #b3b3b3;
+  --primary: #1f6feb;
+  --primary-foreground: #ffffff;
+  --accent: #1f6feb;
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --danger: #cf222e;
+  color-scheme: light;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-header: var(--panel-header);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--foreground);
+  --color-secondary: var(--muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Robots glide between cells instead of teleporting each tick. */
+.robot {
+  transition: transform var(--tick-ms, 250ms) linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .robot {
+    transition: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
