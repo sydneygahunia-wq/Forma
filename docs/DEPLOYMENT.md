@@ -29,7 +29,7 @@ Enabled by environment variables in `render.yaml`:
 
 ## Steps
 
-1. **Neon:** create a project in region *AWS US West 2 (Oregon)*. Copy the connection string with **connection pooling turned off** (the direct host, not `-pooler`). The app rewrites `postgresql://` to the psycopg driver automatically.
+1. **Neon:** create a project in region *AWS US East 2 (Ohio)* (Render's `ohio` region is in the same place). Copy the connection string with **connection pooling turned off** (the direct host, not `-pooler`). The app rewrites `postgresql://` to the psycopg driver automatically.
 2. **Render:** *New → Blueprint*, connect the GitHub repo. Render reads `render.yaml`. Paste the Neon string into `DATABASE_URL`. On first boot the API runs the Alembic migrations and seeds the catalogue. Check `https://<service>.onrender.com/api/health`.
 3. **Vercel:** *Add New → Project*, import the repo, set **Root Directory** to `frontend`, and add the environment variable `NEXT_PUBLIC_API_URL=https://<service>.onrender.com`. Name the project `forma` (the API's CORS rule accepts `https://forma*.vercel.app`; otherwise set `CORS_ORIGIN_REGEX` on Render to match).
 
