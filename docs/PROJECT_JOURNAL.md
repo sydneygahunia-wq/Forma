@@ -96,3 +96,11 @@ ruff, mypy, pip check, pip-audit (0 known vulnerabilities), pytest on SQLite and
 - **First CI run failed** in the frontend type check: `Cannot find name 'LayoutProps'`. Next.js generates route types into `.next/`, which a fresh checkout doesn't have; locally an old `.next/` had hidden this. Reproduced in a fresh clone, then fixed with `next typegen && tsc --noEmit`.
 - Moved the GitHub Actions to v7 (Node 24 runtime), clearing the Node 20 deprecation warnings.
 - **Second run all green:** backend (including the race-condition tests on Postgres 16), frontend, Playwright end-to-end, and both Docker images build. This is the first verification of the Dockerfiles.
+
+## 2026-10-19: deployed
+
+- **Live:** https://forma-ten-bice.vercel.app, with the API at https://forma-api-je9l.onrender.com (Render, Docker, Ohio) and the database on Neon Postgres (AWS us-east-2).
+- Render's GitHub app is restricted to the Forma repo only. It initially installed with access to all repositories, which was corrected.
+- **Verified on the live site:** health check (DB connected, simulation ticking), 24 products seeded with photos, CORS for the Vercel domain, and the WebSocket feed (`wss://`). A real order went through checkout to shipped in about 5 s, order history showed only this browser's orders, and the console streamed 6 robots with no browser console errors.
+- Cold start on the free tier: the first API request took about 22 s.
+- Fix: order tracker step labels overlapped on narrow phones.

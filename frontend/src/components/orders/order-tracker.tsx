@@ -56,8 +56,8 @@ function Steps({ order }: { order: Order }) {
                 <span className={cn("h-[2px] flex-1", i < current ? "bg-foreground" : "bg-border")} />
               )}
             </div>
-            <p className={cn("mt-2 text-[13px]", !done && "text-muted-foreground")}>{STEP_LABEL[s]}</p>
-            <p className="text-[12px] tabular-nums text-muted-foreground">{when ? time(when) : " "}</p>
+            <p className={cn("mt-2 pr-1 text-[11px] sm:text-[13px]", !done && "text-muted-foreground")}>{STEP_LABEL[s]}</p>
+            <p className="pr-1 text-[10px] tabular-nums text-muted-foreground sm:text-[12px]">{when ? time(when) : " "}</p>
           </li>
         );
       })}

@@ -14,13 +14,13 @@
 | 7b. Redis pub/sub between API and worker | 🟡 | Tested against `fakeredis`; not yet against a real Redis server |
 | 8. Optimization: baseline vs improved scheduler, reproducible benchmark | ✅ | `docs/BENCHMARKS.md` (−15.7% mean fulfillment at high load, 10/10 seeds) |
 | 9. Production: tests, Docker, CI, API docs, architecture docs, logging | ✅ | GitHub Actions green: backend on Postgres, frontend, Playwright, and both Docker images build. OpenAPI at `/docs`. |
-| 9b. Deployment to a public URL | ⬜ | |
+| 9b. Deployment to a public URL | ✅ | https://forma-ten-bice.vercel.app (Vercel) + Render API + Neon Postgres; live order verified end to end |
 | 10. Portfolio: README, diagrams, benchmarks, screenshots | 🟡 | README with screenshots, ARCHITECTURE (Mermaid), BENCHMARKS done. Demo video and resume bullets not yet. |
 
 ## Next steps (in order)
 
 1. ~~Push to GitHub and get CI green.~~ Done (2026-10-18).
-2. Run `docker compose up` once, then deploy (e.g. Render or Fly.io with managed Postgres and Redis).
+2. ~~Deploy.~~ Done (2026-10-19). Optional: run `docker compose up` as a full local production-style check, then deploy (e.g. Render or Fly.io with managed Postgres and Redis).
 3. Record a 60-second demo: place an order, watch it get picked, fail a robot, watch the task get re-queued.
 4. Possible improvements, each needing a benchmark before it's claimed:
    - Space-time A* with a reservation table (cooperative pathfinding) to cut wait ticks further.
