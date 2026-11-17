@@ -4,7 +4,7 @@
 
 **An e-commerce store whose orders are fulfilled by a simulated fleet of warehouse robots.**
 
-**Live demo: https://forma-ten-bice.vercel.app** (the free-tier API sleeps when idle, so the first load can take up to a minute)
+**Live demo: https://forma-ten-bice.vercel.app**
 
 Customers shop and check out on a Next.js storefront. The FastAPI backend reserves inventory in a single transaction, so the last unit can never be sold twice. Each order then becomes pick tasks in a deterministic warehouse simulation, where robots plan routes with A* (implemented from scratch), avoid each other on a 2D grid with one-way aisles, and bring every item to one packing station. Customers and the warehouse team both watch it happen live over WebSocket.
 
@@ -93,7 +93,7 @@ CI (`.github/workflows/ci.yml`) runs all of these, with Postgres as a service co
 
 ## Known limitations
 
-- **Free-tier hosting.** The live demo runs on Vercel, Render and Neon free tiers (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)). The API sleeps after ~15 idle minutes and takes up to a minute to wake.
+- **Free-tier hosting.** The live demo runs on Vercel, Render and Neon free tiers. A keep-warm job stops the API from sleeping while letting the database scale to zero (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 - **No authentication on the ops console.** For the public demo this is contained by `DEMO_MODE`: anything a visitor pauses or takes offline heals itself after 2 minutes, stock is restocked, and writes are rate-limited per client.
 - **One simulation process.** The engine is single-threaded by design (deterministic). Scaling beyond one warehouse would mean one engine per warehouse.
 - `npm audit` flags a `braces` advisory inside Next's ESLint plugin. It's dev-only tooling with no patched release upstream yet. Production dependencies report 0 vulnerabilities, and the Python dependencies pass `pip-audit`.

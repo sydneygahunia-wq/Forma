@@ -1,8 +1,8 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Response, status
 
-from app.api.deps import SessionDep
+from app.api.deps import BusDep, SessionDep
 from app.db.models import OrderStatus
 from app.schemas import (
     CartItemIn,
@@ -14,6 +14,7 @@ from app.schemas import (
     ProductOut,
 )
 from app.services import catalog, orders
+from app.services.bus import COMMAND_CHANNEL
 from app.services.rate_limit import limit
 
 router = APIRouter(prefix="/api", tags=["store"])
@@ -71,12 +72,19 @@ def place_order(
     body: OrderCreate,
     response: Response,
     session: SessionDep,
+    bus: BusDep,
+    background: BackgroundTasks,
     idempotency_key: Annotated[str | None, Header(max_length=80)] = None,
 ):
     """Place an order. Send an `Idempotency-Key` header so that retries
     (double-clicks, network timeouts) never create a second order."""
     result = orders.place_order(session, body, idempotency_key)
-    if not result.created:
+    if result.created:
+        # The order is committed; tell the simulation to pick it up now. If
+        # this signal is ever lost, the runner's periodic outbox check (and
+        # its start-up recovery) still dispatch the order.
+        background.add_task(bus.publish, COMMAND_CHANNEL, {"action": "dispatch"})
+    else:
         response.status_code = status.HTTP_200_OK
         response.headers["Idempotent-Replayed"] = "true"
     return result.order

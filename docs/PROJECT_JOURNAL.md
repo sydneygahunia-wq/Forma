@@ -104,3 +104,9 @@ ruff, mypy, pip check, pip-audit (0 known vulnerabilities), pytest on SQLite and
 - **Verified on the live site:** health check (DB connected, simulation ticking), 24 products seeded with photos, CORS for the Vercel domain, and the WebSocket feed (`wss://`). A real order went through checkout to shipped in about 5 s, order history showed only this browser's orders, and the console streamed 6 robots with no browser console errors.
 - Cold start on the free tier: the first API request took about 22 s.
 - Fix: order tracker step labels overlapped on narrow phones.
+
+## 2026-11-16: no more cold starts
+
+- Problem reported: the demo didn't load immediately from the portfolio site. Measured: Vercel pages load in 0.1 s; the Render API took 20–60 s after idling (free-tier spin-down).
+- Added a keep-warm GitHub Action and made the idle API send zero database queries, so Neon still scales to zero (DECISIONS D18). New tests count SQL statements: 200 idle ticks → 0 queries; one order signal → one outbox check; `/api/ping` → 0 queries.
+- Found while testing: `next build` refused to run because Next.js 16.4.2 had a moderate advisory (GHSA-mfr8-8qww-v76h, `use cache` via `unstable_cache`, which Forma doesn't use). Upgraded to the patched 16.4.6. This would also have blocked the next Vercel deploy.

@@ -92,9 +92,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content={"detail": exc.detail, "code": exc.code, **exc.extra},
         )
 
+    @app.get("/api/ping", tags=["ops"])
+    def ping():
+        """Liveness only: never touches the database. Render's health checks
+        and the keep-warm job use this, so they keep the API awake without
+        waking a scale-to-zero database every few seconds."""
+        return {"status": "ok"}
+
     @app.get("/api/health", tags=["ops"])
     def health(request: Request):
-        """Liveness + readiness: checks the database and the simulation feed."""
+        """Readiness: checks the database and the simulation feed."""
         db_ok = True
         try:
             with request.app.state.db.session() as s:

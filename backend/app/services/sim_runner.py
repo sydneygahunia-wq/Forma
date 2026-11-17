@@ -61,6 +61,12 @@ class SimulationRunner:
         self.paused_at: float | None = None
         self.offline_since: dict[int, float] = {}
         self.last_restock = time.monotonic()
+        # The outbox is queried on start-up, when an order signals it, and
+        # otherwise only every outbox_idle_poll_s: an idle simulation sends
+        # no database queries at all.
+        self.dispatch_requested = True
+        self.last_outbox_poll = float("-inf")
+        self.orders_since_restock = True
 
     def _new_sim(self, scheduler: str) -> Simulation:
         sim = Simulation(
@@ -131,8 +137,13 @@ class SimulationRunner:
 
     async def _demo_upkeep(self, now: float) -> None:
         events = self.heal(now)
-        if now - self.last_restock >= self.settings.demo_restock_every_s:
+        # Stock only falls when orders ship, so skip the query when none have.
+        if (
+            self.orders_since_restock
+            and now - self.last_restock >= self.settings.demo_restock_every_s
+        ):
             self.last_restock = now
+            self.orders_since_restock = False
             restocked = await asyncio.to_thread(self.restock)
             if restocked:
                 events.append(
@@ -187,8 +198,24 @@ class SimulationRunner:
 
     def _step(self) -> list[dict[str, Any]]:
         """One tick. Runs in a worker thread so DB I/O doesn't block asyncio."""
+        now = time.monotonic()
+        if (
+            self.dispatch_requested
+            or now - self.last_outbox_poll >= self.settings.outbox_idle_poll_s
+        ):
+            self.dispatch_requested = False
+            self.last_outbox_poll = now
+            self._dispatch_new_orders()
+
+        # 2. Advance the world.
+        events = self.sim.tick()
+
+        # 3. Persist status changes (one transaction per tick, only if any).
+        return self._persist(events)
+
+    def _dispatch_new_orders(self) -> None:
+        """1. Pull new orders from the outbox (the orders table)."""
         with self.db.session() as s:
-            # 1. Pull new orders from the outbox.
             new_orders = list(
                 s.scalars(
                     select(Order)
@@ -203,11 +230,13 @@ class SimulationRunner:
                 self.sim.submit_order(order.public_id, items)
                 order.dispatched_at = utcnow()
             s.commit()
+        if new_orders:
+            self.orders_since_restock = True
+        if len(new_orders) == DISPATCH_BATCH:
+            self.dispatch_requested = True  # more may be waiting
 
-        # 2. Advance the world.
-        events = self.sim.tick()
-
-        # 3. Persist status changes (one transaction per tick).
+    def _persist(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """3. Write this tick's order status changes; no changes, no query."""
         changes = [e for e in events if e["type"] in EVENT_STATUS]
         if changes:
             with self.db.session() as s:
@@ -243,6 +272,10 @@ class SimulationRunner:
 
     def apply_command(self, cmd: dict[str, Any]) -> None:
         action = cmd["action"]
+        if action == "dispatch":
+            # Sent by the API after it commits an order: check the outbox now.
+            self.dispatch_requested = True
+            return
         if action == "pause":
             self.paused = True
             self.paused_at = time.monotonic()

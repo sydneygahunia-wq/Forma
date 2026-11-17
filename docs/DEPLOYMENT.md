@@ -14,10 +14,17 @@ browser ──► Vercel (Next.js) ──REST/WebSocket──► Render (FastAPI
 
 The API runs with `SIM_MODE=embedded` (one process, no Redis). Redis only becomes necessary with multiple API replicas or a separate simulation worker (see `docker-compose.yml`).
 
-## Free-tier trade-offs
+## Free-tier trade-offs, and how the demo stays fast
 
-- Render's free instance **sleeps after ~15 minutes without traffic** and takes up to a minute to wake. The frontend shows a "Waking up the warehouse…" banner and keeps retrying instead of erroring. On wake, the runner re-dispatches any unfinished orders (the transactional outbox, see ARCHITECTURE.md).
-- Neon suspends compute when idle; the first query after that takes about a second.
+- Render's free instance **sleeps after 15 minutes without traffic** and takes up to a minute to wake. Two things prevent that:
+  - `.github/workflows/keep-warm.yml` pings `/api/ping` every 5 minutes. One always-on service uses about 744 of Render's 750 free hours a month.
+  - The portfolio site sends the same ping when someone lands on it, so the API is already starting before they click through.
+  If it does sleep anyway (for example, GitHub pauses scheduled workflows in repos with no activity for 60 days), the frontend shows a "Waking up the warehouse…" banner and keeps retrying.
+- Neon's free plan has **100 compute-hours a month** and suspends after 5 minutes without queries. Always on, even the smallest compute would need about 186, so the API is built to send **no queries while idle**:
+  - Render's health check and the keep-warm ping hit `/api/ping`, which never touches the database (`/api/health` does, for readiness).
+  - New orders wake the simulation through the event bus instead of a query every tick. The outbox is only re-checked every 15 minutes as a safety net (`OUTBOX_IDLE_POLL_S`).
+  - The demo restock only runs if orders have shipped since the last one.
+  Tests assert that 200 idle ticks issue zero SQL statements.
 
 ## Public-demo safeguards
 

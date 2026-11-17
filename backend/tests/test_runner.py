@@ -284,3 +284,113 @@ def test_cors_allows_vercel_previews_by_regex(db_url):
             ok.headers.get("access-control-allow-origin") == "https://forma-git-main-abc.vercel.app"
         )
         assert "access-control-allow-origin" not in bad.headers
+
+
+# ------------------------------------------------- idle database traffic
+
+
+class QueryCounter:
+    """Counts every SQL statement sent through an engine."""
+
+    def __init__(self, engine):
+        from sqlalchemy import event
+
+        self.n = 0
+        self._engine = engine
+        event.listen(engine, "before_cursor_execute", self._on)
+
+    def _on(self, *_args):
+        self.n += 1
+
+    def close(self):
+        from sqlalchemy import event
+
+        event.remove(self._engine, "before_cursor_execute", self._on)
+
+
+def test_idle_simulation_sends_no_queries(migrated_db, db_url):
+    """A scale-to-zero database (Neon) only sleeps if nothing queries it."""
+    runner = SimulationRunner(_settings(db_url, outbox_idle_poll_s=900), migrated_db, InMemoryBus())
+    runner._step()  # start-up outbox check
+    counter = QueryCounter(migrated_db.engine)
+    try:
+        for _ in range(200):
+            runner._step()
+        assert counter.n == 0
+        # A new order's signal triggers exactly one outbox check.
+        oid = _place(migrated_db, "MUG-001", 1)
+        before = counter.n
+        runner.apply_command({"action": "dispatch"})
+        runner._step()
+        assert oid in runner.sim.orders
+        assert counter.n > before
+    finally:
+        counter.close()
+
+
+def test_outbox_fallback_poll_catches_a_missed_signal(migrated_db, db_url):
+    runner = SimulationRunner(_settings(db_url, outbox_idle_poll_s=900), migrated_db, InMemoryBus())
+    runner._step()
+    oid = _place(migrated_db)  # no dispatch signal sent
+    runner._step()
+    assert oid not in runner.sim.orders
+    runner.last_outbox_poll -= 901  # 15 minutes pass
+    runner._step()
+    assert oid in runner.sim.orders
+
+
+def test_demo_restock_skips_the_database_when_nothing_was_ordered(migrated_db, db_url):
+    runner = SimulationRunner(
+        _settings(db_url, demo_mode=True, demo_restock_every_s=1), migrated_db, InMemoryBus()
+    )
+    runner.orders_since_restock = False
+    counter = QueryCounter(migrated_db.engine)
+    try:
+        asyncio.run(runner._demo_upkeep(runner.last_restock + 10))
+        assert counter.n == 0
+    finally:
+        counter.close()
+
+
+def test_ping_never_touches_the_database(db_url):
+    settings = Settings(database_url=db_url, sim_mode="external", log_level="WARNING")
+    with TestClient(create_app(settings)) as client:
+        counter = QueryCounter(client.app.state.db.engine)
+        try:
+            assert client.get("/api/ping").json() == {"status": "ok"}
+            assert counter.n == 0
+            client.get("/api/health")
+            assert counter.n == 1  # readiness does check the database
+        finally:
+            counter.close()
+
+
+def test_placing_an_order_signals_the_simulation(db_url):
+    settings = Settings(database_url=db_url, sim_mode="external", log_level="WARNING")
+    with TestClient(create_app(settings)) as client:
+        bus = client.app.state.bus
+        received: list[dict] = []
+
+        async def listen():
+            async for msg in bus.subscribe("forma:commands"):
+                received.append(msg)
+                return
+
+        # InMemoryBus only delivers to live subscribers: start listening on
+        # the app's event loop and wait until the subscription exists.
+        task = client.portal.start_task_soon(listen)
+        deadline = time.time() + 2
+        while not bus._subs.get("forma:commands") and time.time() < deadline:
+            time.sleep(0.01)
+
+        mug = client.get("/api/products").json()[0]
+        res = client.post(
+            "/api/orders",
+            json={
+                "customer_email": "sig@example.com",
+                "items": [{"product_id": mug["id"], "quantity": 1}],
+            },
+        )
+        assert res.status_code == 201
+        task.result(timeout=2)
+        assert received == [{"action": "dispatch"}]

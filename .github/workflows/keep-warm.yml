@@ -1,0 +1,21 @@
+name: Keep demo warm
+
+# Render's free plan stops the API after 15 minutes without traffic, and the
+# next visitor waits up to a minute for it to boot. Pinging every 5 minutes
+# keeps it running (a single service fits in Render's 750 free hours/month).
+# /api/ping never touches the database, so Neon can still scale to zero.
+on:
+  schedule:
+    - cron: "2-59/5 * * * *" # every 5 min, avoiding the busy top of the hour
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the API
+        run: >
+          curl --fail --silent --show-error --max-time 120
+          --retry 4 --retry-delay 15 --retry-all-errors
+          https://forma-api-je9l.onrender.com/api/ping

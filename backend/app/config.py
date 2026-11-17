@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # "external": a separate `python -m app.worker` process runs it.
     sim_mode: Literal["embedded", "external"] = "embedded"
     tick_interval_ms: int = 250
+    # New orders wake the simulation through the event bus, so the outbox
+    # query is only a safety net for a missed signal. Polling it rarely lets
+    # a scale-to-zero database (Neon) suspend while nothing is happening.
+    outbox_idle_poll_s: int = 900
     num_robots: int = 6
     # batch_greedy won on every seed in docs/BENCHMARKS.md, so it is the default.
     scheduler: Literal["fifo", "nearest", "batch_greedy"] = "batch_greedy"
